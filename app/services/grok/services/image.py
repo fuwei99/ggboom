@@ -377,9 +377,9 @@ class ImageWSBaseProcessor(BaseProcessor):
     def _pick_best(self, existing: Optional[Dict], incoming: Dict) -> Dict:
         if not existing:
             return incoming
-        if incoming.get("is_final") and not existing.get("is_final"):
+        if incoming.get("percentage_complete", 0) == 100 and existing.get("percentage_complete", 0) != 100:
             return incoming
-        if existing.get("is_final") and not incoming.get("is_final"):
+        if existing.get("percentage_complete", 0) == 100 and incoming.get("percentage_complete", 0) != 100:
             return existing
         
         # Prefer higher completion percentage
