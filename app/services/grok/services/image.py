@@ -398,11 +398,6 @@ class ImageWSBaseProcessor(BaseProcessor):
     async def _to_output(self, image_id: str, item: Dict) -> str:
         try:
             if self.response_format == "url":
-                # Return remote online URL directly if present
-                remote_url = item.get("url", "")
-                if remote_url:
-                    return remote_url
-                # Fallback to local save if only blob is present
                 return await self._save_blob(
                     image_id,
                     item.get("blob", ""),
