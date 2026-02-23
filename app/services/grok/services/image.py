@@ -401,7 +401,7 @@ class ImageWSBaseProcessor(BaseProcessor):
                 return await self._save_blob(
                     image_id,
                     item.get("blob", ""),
-                    item.get("is_final", False),
+                    item.get("percentage_complete", 0) == 100,
                     ext=item.get("ext"),
                 )
             return self._strip_base64(item.get("blob", ""))
@@ -496,7 +496,7 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                         max(
                             images.items(),
                             key=lambda x: (
-                                x[1].get("is_final", False),
+                                x[1].get("percentage_complete", 0) == 100,
                                 x[1].get("percentage_complete", 0),
                                 x[1].get("blob_size", 0),
                             ),
@@ -590,7 +590,7 @@ class ImageWSCollectProcessor(ImageWSBaseProcessor):
         selected = sorted(
             images.values(),
             key=lambda x: (
-                x.get("is_final", False),
+                x.get("percentage_complete", 0) == 100,
                 x.get("percentage_complete", 0),
                 x.get("blob_size", 0),
             ),
