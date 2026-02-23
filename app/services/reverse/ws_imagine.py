@@ -7,7 +7,7 @@ import orjson
 import re
 import time
 import uuid
-from typing import AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, Optional
 
 import aiohttp
 
