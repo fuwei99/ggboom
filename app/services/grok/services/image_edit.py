@@ -113,7 +113,7 @@ class ImageEditService:
                     processor = ImageStreamProcessor(
                         model_info.model_id,
                         current_token,
-                        n=n,
+                        n=6 if chat_format else n,
                         response_format=response_format,
                         chat_format=chat_format,
                     )
@@ -131,10 +131,11 @@ class ImageEditService:
                     token=current_token,
                     prompt=prompt,
                     model_info=model_info,
-                    n=n,
+                    n=6 if chat_format else n,
                     response_format=response_format,
                     tool_overrides=tool_overrides,
                     model_config_override=model_config_override,
+                    chat_format=chat_format,
                 )
                 try:
                     effort = (
@@ -231,6 +232,7 @@ class ImageEditService:
         response_format: str,
         tool_overrides: dict,
         model_config_override: dict,
+        chat_format: bool = False,
     ) -> List[str]:
         calls_needed = (n + 1) // 2
 
@@ -245,7 +247,7 @@ class ImageEditService:
                 model_config_override=model_config_override,
             )
             processor = ImageCollectProcessor(
-                model_info.model_id, token, response_format=response_format
+                model_info.model_id, token, response_format=response_format, chat_format=chat_format
             )
             return await processor.process(response)
 
@@ -482,11 +484,12 @@ class ImageStreamProcessor(BaseProcessor):
 class ImageCollectProcessor(BaseProcessor):
     """HTTP image non-stream processor."""
 
-    def __init__(self, model: str, token: str = "", response_format: str = "b64_json"):
+    def __init__(self, model: str, token: str = "", response_format: str = "b64_json", chat_format: bool = False):
         if response_format == "base64":
             response_format = "b64_json"
         super().__init__(model, token)
         self.response_format = response_format
+        self.chat_format = chat_format
 
     async def process(self, response: AsyncIterable[bytes]) -> List[str]:
         """Process and collect images."""
@@ -511,6 +514,8 @@ class ImageCollectProcessor(BaseProcessor):
                             if self.response_format == "url":
                                 processed = await self.process_url(url, "image")
                                 if processed:
+                                    if self.chat_format:
+                                        processed = wrap_image_content(processed, self.response_format)
                                     images.append(processed)
                                 continue
                             try:
@@ -523,13 +528,18 @@ class ImageCollectProcessor(BaseProcessor):
                                         b64 = base64_data.split(",", 1)[1]
                                     else:
                                         b64 = base64_data
-                                    images.append(b64)
+                                    output = b64
+                                    if self.chat_format:
+                                        output = wrap_image_content(output, self.response_format)
+                                    images.append(output)
                             except Exception as e:
                                 logger.warning(
                                     f"Failed to convert image to base64, falling back to URL: {e}"
                                 )
                                 processed = await self.process_url(url, "image")
                                 if processed:
+                                    if self.chat_format:
+                                        processed = wrap_image_content(processed, self.response_format)
                                     images.append(processed)
 
         except asyncio.CancelledError:

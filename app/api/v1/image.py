@@ -44,7 +44,7 @@ class ImageGenerationRequest(BaseModel):
 
     prompt: str = Field(..., description="图片描述")
     model: Optional[str] = Field("grok-imagine-1.0", description="模型名称")
-    n: Optional[int] = Field(4, ge=1, le=10, description="生成数量 (1-10)")
+    n: Optional[int] = Field(1, ge=1, le=10, description="生成数量 (1-10)")
     size: Optional[str] = Field(
         "1024x1024",
         description="图片尺寸: 1280x720, 720x1280, 1792x1024, 1024x1792, 1024x1024",
@@ -61,7 +61,7 @@ class ImageEditRequest(BaseModel):
     prompt: str = Field(..., description="编辑描述")
     model: Optional[str] = Field("grok-imagine-1.0-edit", description="模型名称")
     image: Optional[Union[str, List[str]]] = Field(None, description="待编辑图片文件")
-    n: Optional[int] = Field(4, ge=1, le=10, description="生成数量 (1-10)")
+    n: Optional[int] = Field(1, ge=1, le=10, description="生成数量 (1-10)")
     size: Optional[str] = Field(
         "1024x1024",
         description="图片尺寸: 1280x720, 720x1280, 1792x1024, 1024x1792, 1024x1024",
@@ -88,6 +88,14 @@ def _validate_common_request(
     if request.n < 1 or request.n > 10:
         raise ValidationException(
             message="n must be between 1 and 10", param="n", code="invalid_n"
+        )
+
+    # 流式只支持 n=1 或 n=2
+    if request.stream and request.n not in [1, 2]:
+        raise ValidationException(
+            message="Streaming is only supported when n=1 or n=2",
+            param="stream",
+            code="invalid_stream_n",
         )
 
     if allow_ws_stream:

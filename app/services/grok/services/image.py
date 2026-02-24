@@ -143,6 +143,7 @@ class ImageGenerationService:
                     response_format=response_format,
                     aspect_ratio=aspect_ratio,
                     enable_nsfw=enable_nsfw,
+                    chat_format=chat_format,
                 )
             except UpstreamException as e:
                 last_error = e
@@ -180,17 +181,18 @@ class ImageGenerationService:
     ) -> ImageGenerationResult:
         if enable_nsfw is None:
             enable_nsfw = bool(get_config("image.nsfw"))
+        target_n = 6 if chat_format else n
         upstream = image_service.stream(
             token=token,
             prompt=prompt,
             aspect_ratio=aspect_ratio,
-            n=n,
+            n=target_n,
             enable_nsfw=enable_nsfw,
         )
         processor = ImageWSStreamProcessor(
             model_info.model_id,
             token,
-            n=n,
+            n=target_n,
             response_format=response_format,
             size=size,
             chat_format=chat_format,
@@ -214,14 +216,16 @@ class ImageGenerationService:
         response_format: str,
         aspect_ratio: str,
         enable_nsfw: Optional[bool] = None,
+        chat_format: bool = False,
     ) -> ImageGenerationResult:
         if enable_nsfw is None:
             enable_nsfw = bool(get_config("image.nsfw"))
         all_images: List[str] = []
         seen = set()
         expected_per_call = 6
-        calls_needed = max(1, int(math.ceil(n / expected_per_call)))
-        calls_needed = min(calls_needed, n)
+        target_n = 6 if chat_format else n
+        calls_needed = max(1, int(math.ceil(target_n / expected_per_call)))
+        calls_needed = min(calls_needed, target_n)
 
         async def _fetch_batch(call_target: int):
             upstream = image_service.stream(
@@ -236,12 +240,13 @@ class ImageGenerationService:
                 token,
                 n=call_target,
                 response_format=response_format,
+                chat_format=chat_format,
             )
             return await processor.process(upstream)
 
         tasks = []
         for i in range(calls_needed):
-            remaining = n - (i * expected_per_call)
+            remaining = target_n - (i * expected_per_call)
             call_target = min(expected_per_call, remaining)
             tasks.append(_fetch_batch(call_target))
 
@@ -254,9 +259,9 @@ class ImageGenerationService:
                 if img not in seen:
                     seen.add(img)
                     all_images.append(img)
-                if len(all_images) >= n:
+                if len(all_images) >= target_n:
                     break
-            if len(all_images) >= n:
+            if len(all_images) >= target_n:
                 break
 
         try:
@@ -264,7 +269,7 @@ class ImageGenerationService:
         except Exception as e:
             logger.warning(f"Failed to consume token: {e}")
 
-        selected = self._select_images(all_images, n)
+        selected = self._select_images(all_images, target_n)
         usage_override = {
             "total_tokens": 0,
             "input_tokens": 0,
@@ -377,20 +382,10 @@ class ImageWSBaseProcessor(BaseProcessor):
     def _pick_best(self, existing: Optional[Dict], incoming: Dict) -> Dict:
         if not existing:
             return incoming
-        if incoming.get("percentage_complete", 0) == 100 and existing.get("percentage_complete", 0) != 100:
+        if incoming.get("is_final") and not existing.get("is_final"):
             return incoming
-        if existing.get("percentage_complete", 0) == 100 and incoming.get("percentage_complete", 0) != 100:
+        if existing.get("is_final") and not incoming.get("is_final"):
             return existing
-        
-        # Prefer higher completion percentage
-        inc_pct = incoming.get("percentage_complete", 0)
-        ext_pct = existing.get("percentage_complete", 0)
-        if inc_pct > ext_pct:
-            return incoming
-        elif inc_pct < ext_pct:
-            return existing
-            
-        # Fallback to blob size if percentage is equal
         if incoming.get("blob_size", 0) > existing.get("blob_size", 0):
             return incoming
         return existing
@@ -401,7 +396,7 @@ class ImageWSBaseProcessor(BaseProcessor):
                 return await self._save_blob(
                     image_id,
                     item.get("blob", ""),
-                    item.get("percentage_complete", 0) == 100,
+                    item.get("is_final", False),
                     ext=item.get("ext"),
                 )
             return self._strip_base64(item.get("blob", ""))
@@ -465,6 +460,13 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                     },
                 )
                 return
+            
+            if item.get("type") == "status":
+                if item.get("current_status") == "completed":
+                    if item.get("moderated"):
+                        self._moderated_count = getattr(self, "_moderated_count", 0) + 1
+                continue
+
             if item.get("type") != "image":
                 continue
 
@@ -485,7 +487,72 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                 continue
 
             if item.get("stage") != "final":
-                continue
+                if self.chat_format:
+                    continue
+                if image_id not in self._initial_sent:
+                    self._initial_sent.add(image_id)
+                    stage = item.get("stage") or "preview"
+                    if stage == "medium":
+                        partial_index = 1
+                        self._partial_map[image_id] = 1
+                    else:
+                        partial_index = 0
+                        self._partial_map[image_id] = 0
+                else:
+                    stage = item.get("stage") or "partial"
+                    if stage == "preview":
+                        continue
+                    partial_index = self._partial_map.get(image_id, 0)
+                    if stage == "medium":
+                        partial_index = max(partial_index, 1)
+                    self._partial_map[image_id] = partial_index
+
+                if self.response_format == "url":
+                    partial_id = f"{image_id}-{stage}-{partial_index}"
+                    partial_out = await self._save_blob(
+                        partial_id,
+                        item.get("blob", ""),
+                        False,
+                        ext=item.get("ext"),
+                    )
+                else:
+                    partial_out = self._strip_base64(item.get("blob", ""))
+
+                if self.chat_format and partial_out:
+                    partial_out = wrap_image_content(partial_out, self.response_format)
+
+                if not partial_out:
+                    continue
+
+                if self.chat_format:
+                    # OpenAI ChatCompletion chunk format for partial
+                    if not self._id_generated:
+                        self._response_id = make_response_id()
+                        self._id_generated = True
+                    yield self._sse(
+                        "chat.completion.chunk",
+                        make_chat_chunk(
+                            self._response_id,
+                            self.model,
+                            partial_out,
+                            index=index,
+                        ),
+                    )
+                else:
+                    # Original image_generation format
+                    yield self._sse(
+                        "image_generation.partial_image",
+                        {
+                            "type": "image_generation.partial_image",
+                            self.response_field: partial_out,
+                            "created_at": int(time.time()),
+                            "size": self.size,
+                            "index": index,
+                            "partial_image_index": partial_index,
+                            "image_id": image_id,
+                            "stage": stage,
+                        },
+                    )
 
         if self.n == 1:
             if self._target_id and self._target_id in images:
@@ -496,8 +563,7 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                         max(
                             images.items(),
                             key=lambda x: (
-                                x[1].get("percentage_complete", 0) == 100,
-                                x[1].get("percentage_complete", 0),
+                                x[1].get("is_final", False),
                                 x[1].get("blob_size", 0),
                             ),
                         )
@@ -512,10 +578,30 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                 if image_id in images
             ]
 
+        # Ensure we only process final images for chat format, and exclude pngs
+        if self.chat_format:
+            filtered_selected = []
+            for image_id, item in selected:
+                if item.get("is_final", False):
+                    ext = (item.get("ext") or "").lower()
+                    if ext != "png":
+                        filtered_selected.append((image_id, item))
+            selected = filtered_selected
+
         for image_id, item in selected:
-            output = await self._to_output(image_id, item)
-            if self.chat_format and output:
-                output = wrap_image_content(output, self.response_format)
+            if self.response_format == "url":
+                output = await self._save_blob(
+                    f"{image_id}-final",
+                    item.get("blob", ""),
+                    item.get("is_final", False),
+                    ext=item.get("ext"),
+                )
+                if self.chat_format and output:
+                    output = wrap_image_content(output, self.response_format)
+            else:
+                output = await self._to_output(image_id, item)
+                if self.chat_format and output:
+                    output = wrap_image_content(output, self.response_format)
 
             if not output:
                 continue
@@ -553,7 +639,6 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                         "index": index,
                         "image_id": image_id,
                         "stage": "final",
-                        "percentage_complete": item.get("percentage_complete", 0),
                         "usage": {
                             "total_tokens": 0,
                             "input_tokens": 0,
@@ -563,15 +648,44 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                     },
                 )
 
+        if not selected and getattr(self, "_moderated_count", 0) > 0:
+            if self.chat_format:
+                if not self._id_generated:
+                    self._response_id = make_response_id()
+                    self._id_generated = True
+                yield self._sse(
+                    "chat.completion.chunk",
+                    make_chat_chunk(
+                        self._response_id,
+                        self.model,
+                        "所有图片都被和谐了，试试改改提示词",
+                        index=0,
+                        is_final=True,
+                    ),
+                )
+            else:
+                yield self._sse(
+                    "error",
+                    {
+                        "error": {
+                            "message": "所有图片都被和谐了，试试改改提示词",
+                            "type": "server_error",
+                            "code": "moderated",
+                        }
+                    },
+                )
+
 
 class ImageWSCollectProcessor(ImageWSBaseProcessor):
     """WebSocket image non-stream processor."""
 
     def __init__(
-        self, model: str, token: str = "", n: int = 1, response_format: str = "b64_json"
+        self, model: str, token: str = "", n: int = 1, response_format: str = "b64_json", chat_format: bool = False
     ):
         super().__init__(model, token, response_format)
         self.n = n
+        self.chat_format = chat_format
+        self._moderated_count = 0
 
     async def process(self, response: AsyncIterable[dict]) -> List[str]:
         images: Dict[str, Dict] = {}
@@ -580,6 +694,10 @@ class ImageWSCollectProcessor(ImageWSBaseProcessor):
             if item.get("type") == "error":
                 message = item.get("error") or "Upstream error"
                 raise UpstreamException(message, details=item)
+            if item.get("type") == "status":
+                if item.get("current_status") == "completed" and item.get("moderated"):
+                    self._moderated_count += 1
+                continue
             if item.get("type") != "image":
                 continue
             image_id = item.get("image_id")
@@ -587,13 +705,19 @@ class ImageWSCollectProcessor(ImageWSBaseProcessor):
                 continue
             images[image_id] = self._pick_best(images.get(image_id), item)
 
+        if self.chat_format:
+            selected = []
+            for img in images.values():
+                if img.get("is_final", False):
+                    ext = (img.get("ext") or "").lower()
+                    if ext != "png":
+                        selected.append(img)
+        else:
+            selected = list(images.values())
+
         selected = sorted(
-            images.values(),
-            key=lambda x: (
-                x.get("percentage_complete", 0) == 100,
-                x.get("percentage_complete", 0),
-                x.get("blob_size", 0),
-            ),
+            selected,
+            key=lambda x: (x.get("is_final", False), x.get("blob_size", 0)),
             reverse=True,
         )
         if self.n:
@@ -603,7 +727,13 @@ class ImageWSCollectProcessor(ImageWSBaseProcessor):
         for item in selected:
             output = await self._to_output(item.get("image_id", ""), item)
             if output:
+                if self.chat_format:
+                    output = wrap_image_content(output, self.response_format)
                 results.append(output)
+
+        if not results and self._moderated_count > 0:
+            if self.chat_format:
+                return ["所有图片都被和谐了，试试改改提示词"]
 
         return results
 

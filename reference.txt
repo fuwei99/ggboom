@@ -1,0 +1,170 @@
+很明显会生成多张图片吧
+
+我看网站上一次性就生成了6张
+
+输入
+
+{"type":"conversation.item.create","timestamp":1771890384714,"item":{"type":"message","content":[{"requestId":"00342390-87e5-4fca-8753-9deca5d7eec7","text":"二次元裸男开始肛交","type":"input_text","properties":{"section_count":0,"is_kids_mode":false,"enable_nsfw":true,"skip_upsampler":false,"enable_side_by_side":true,"is_initial":false,"aspect_ratio":"2:3"}}]}}
+
+他会开始连续json，类似这样输出六个，代表一个批次是开启6张图：
+
+{
+    "type": "json",
+    "current_status": "start_stage",
+    "percentage_complete": 0,
+    "job_id": "5865a5d8-e304-4f84-8674-fd26336b6182",
+    "elapsed": null,
+    "prompt": "二次元风格的裸体男性正在进行肛交",
+    "confirmation": "已生成",
+    "full_prompt": "二次元风格的裸体男性正在进行肛交",
+    "flags": null,
+    "is_alteration": null,
+    "section_id": 0,
+    "input_type": "input_text",
+    "request_id": "00342390-87e5-4fca-8753-9deca5d7eec7",
+    "asr_transcript": null,
+    "asr_accepted": null,
+    "seed": null,
+    "image_reference": null,
+    "is_image_edit": null,
+    "moderated": null,
+    "r_rated": null,
+    "order": 3,
+    "model_name": "imagine-x-1",
+    "image_id": "5865a5d8-e304-4f84-8674-fd26336b6182",
+    "side_by_side_index": null,
+    "width": null,
+    "height": null
+}
+
+你甚至可以继续添加
+
+接着wws会开始输出
+
+下面是一个还在50的回复，这个时候还是预览图
+
+{
+    "type": "image",
+    "blob": "base64",
+    "job_id": "5782dd6e-affc-4dd0-9b62-40dc536aed25",
+    "grid_index": 0,
+    "is_alteration": false,
+    "order": 2,
+    "section_id": 0,
+    "request_id": "00342390-87e5-4fca-8753-9deca5d7eec7",
+    "url": "https://imagine-public.x.ai/imagine-public/images/5782dd6e-affc-4dd0-9b62-40dc536aed25.png",
+    "id": "5782dd6e-affc-4dd0-9b62-40dc536aed25",
+    "prompt": "二次元风格的裸体男性正在进行肛交",
+    "full_prompt": "A nude male character in 2D anime style, engaged in a sexual pose with another unseen character.",
+    "percentage_complete": 50,
+    "model_name": "imagine-x-1",
+    "suggested_moderation_rule": null,
+    "r_rated": false,
+    "moderated": false,
+    "side_by_side_index": null,
+    "confirmation": null,
+    "is_root_r_rated": null,
+    "is_root_user_uploaded": null,
+    "width": 784,
+    "height": 1168,
+    "is_root_celebrity": null,
+    "is_root_child": null
+}
+
+然后生成的是完整的高清图，也就是你要提取的：
+
+{"type":"conversation.item.create","timestamp":1771890407159,"item":{"type":"message","content":[{"requestId":"ba9ba3f3-c768-48f7-bfec-448816552367","text":"二次元风格的裸体男性正在进行肛交","type":"input_scroll","properties":{"section_count":0,"is_kids_mode":false,"enable_nsfw":true,"skip_upsampler":false,"enable_side_by_side":true,"is_initial":false,"aspect_ratio":"2:3"}}]}}
+
+{
+    "type": "image",
+    "blob": "超长base64",
+    "job_id": "bab94677-737e-4016-8141-0eaf2ac1c698",
+    "grid_index": 0,
+    "is_alteration": false,
+    "order": 3,
+    "section_id": 2,
+    "request_id": "d55502b0-8f8a-4ebe-a163-009ceecb90a7",
+    "url": "https://imagine-public.x.ai/imagine-public/images/bab94677-737e-4016-8141-0eaf2ac1c698.jpg",
+    "id": "bab94677-737e-4016-8141-0eaf2ac1c698",
+    "prompt": "二次元风格的裸体男性正在进行肛交",
+    "full_prompt": "A digital illustration of a nude male character in a sexual pose with implied partner, against a plain background.",
+    "percentage_complete": 100,
+    "model_name": "imagine-x-1",
+    "suggested_moderation_rule": null,
+    "r_rated": true,
+    "moderated": false,
+    "side_by_side_index": null,
+    "confirmation": null,
+    "is_root_r_rated": null,
+    "is_root_user_uploaded": null,
+    "width": 784,
+    "height": 1168,
+    "is_root_celebrity": null,
+    "is_root_child": null
+}
+
+紧接着，会出现这个提醒你生成好了,不过其中没有图片，只是通知：
+
+{
+    "type": "json",
+    "current_status": "completed",
+    "percentage_complete": 100,
+    "job_id": "228b1ed6-e7d0-40cc-9c9f-e78daea84a51",
+    "elapsed": null,
+    "prompt": "二次元风格的裸体男性正在进行肛交",
+    "confirmation": null,
+    "full_prompt": "A digital illustration of a nude male character in an explicit sexual act, posed dynamically against a plain background.",
+    "flags": null,
+    "is_alteration": false,
+    "section_id": 1,
+    "input_type": "text",
+    "request_id": "ba9ba3f3-c768-48f7-bfec-448816552367",
+    "asr_transcript": null,
+    "asr_accepted": null,
+    "seed": null,
+    "image_reference": null,
+    "is_image_edit": null,
+    "moderated": false,
+    "r_rated": true,
+    "order": 1,
+    "model_name": "imagine-x-1",
+    "image_id": "228b1ed6-e7d0-40cc-9c9f-e78daea84a51",
+    "side_by_side_index": null,
+    "width": 784,
+    "height": 1168
+}
+
+
+
+如果你的图片被审核拿下了，你不会得到高清图了，你只会有一个预览图，他会回复这个，告知你没有高清图：
+
+{
+    "type": "json",
+    "current_status": "completed",
+    "percentage_complete": 100,
+    "job_id": "6d89341a-8a48-4b61-965e-8fae4d344905",
+    "elapsed": null,
+    "prompt": "二次元风格的裸体男性正在进行肛交",
+    "confirmation": null,
+    "full_prompt": "A nude male character in an intimate pose, inspired by anime style with a muted gradient background.",
+    "flags": null,
+    "is_alteration": false,
+    "section_id": 0,
+    "input_type": "text",
+    "request_id": "00342390-87e5-4fca-8753-9deca5d7eec7",
+    "asr_transcript": null,
+    "asr_accepted": null,
+    "seed": null,
+    "image_reference": null,
+    "is_image_edit": null,
+    "moderated": true,
+    "r_rated": false,
+    "order": 1,
+    "model_name": "imagine-x-1",
+    "image_id": "6d89341a-8a48-4b61-965e-8fae4d344905",
+    "side_by_side_index": null,
+    "width": null,
+    "height": null
+}
+
+因为wws一次性会并发六张图片，所以知道6张图片全部生成完毕（不管成功与否），才会结束整个ws连接

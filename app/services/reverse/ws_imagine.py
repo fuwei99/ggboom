@@ -7,7 +7,7 @@ import orjson
 import re
 import time
 import uuid
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import AsyncGenerator, Dict, Optional
 
 import aiohttp
 
@@ -36,38 +36,36 @@ class ImagineWebSocketReverse:
             return None, None
         return match.group(1), match.group(2).lower()
 
-    def _is_final_image(self, url: str, percentage_complete: int) -> bool:
-        if percentage_complete == 100:
-            return True
+    def _is_final_image(self, url: str, blob_size: int, final_min_bytes: int, percentage_complete: int | None = None) -> bool:
+        if percentage_complete is not None:
+            return percentage_complete >= 100
         url_lower = (url or "").lower()
         if url_lower.endswith((".jpg", ".jpeg")):
             return True
-        return False
+        return blob_size > final_min_bytes
 
-    def _classify_image(self, msg: Dict[str, Any], final_min_bytes: int, medium_min_bytes: int) -> Optional[Dict[str, object]]:
-        url = msg.get("url", "")
-        blob = msg.get("blob", "")
-        # We can still process even if url is empty, but we need some data.
-        
+    def _classify_image(self, url: str, blob: str, final_min_bytes: int, medium_min_bytes: int, percentage_complete: int | None = None) -> Optional[Dict[str, object]]:
+        if not url or not blob:
+            return None
+
         image_id, ext = self._parse_image_url(url)
-        image_id = image_id or msg.get("id") or uuid.uuid4().hex
-        blob_size = len(blob) if blob else 0
-        
-        # New logic: rely on percentage_complete from payload
-        percentage_complete = msg.get("percentage_complete", 0)
-        
-        # Fallback to blob size if percentage_complete is missing or 0 but we have a large blob.
-        if percentage_complete == 0 and blob_size > 0:
-            if url.lower().endswith((".jpg", ".jpeg")) or blob_size > final_min_bytes:
-                percentage_complete = 100
-        
-        is_final = self._is_final_image(url, percentage_complete)
+        image_id = image_id or uuid.uuid4().hex
+        blob_size = len(blob)
+        is_final = self._is_final_image(url, blob_size, final_min_bytes, percentage_complete)
 
-        stage = (
-            "final"
-            if is_final
-            else ("medium" if percentage_complete >= 50 else "preview")
-        )
+        if percentage_complete is not None:
+            if percentage_complete >= 100:
+                stage = "final"
+            elif percentage_complete >= 50:
+                stage = "medium"
+            else:
+                stage = "preview"
+        else:
+            stage = (
+                "final"
+                if is_final
+                else ("medium" if blob_size > medium_min_bytes else "preview")
+            )
 
         return {
             "type": "image",
@@ -78,7 +76,6 @@ class ImagineWebSocketReverse:
             "blob_size": blob_size,
             "url": url,
             "is_final": is_final,
-            "percentage_complete": percentage_complete,
         }
 
     def _build_request_message(self, request_id: str, prompt: str, aspect_ratio: str, enable_nsfw: bool) -> Dict[str, object]:
@@ -198,6 +195,8 @@ class ImagineWebSocketReverse:
 
                 final_ids: set[str] = set()
                 completed = 0
+                total_jobs = 0
+                completed_notifications = 0
                 start_time = last_activity = time.monotonic()
                 medium_received_time: Optional[float] = None
 
@@ -206,6 +205,9 @@ class ImagineWebSocketReverse:
                         ws_msg = await asyncio.wait_for(ws.receive(), timeout=5.0)
                     except asyncio.TimeoutError:
                         now = time.monotonic()
+                        # 如果已收到所有完成通知，退出
+                        if total_jobs > 0 and completed_notifications >= total_jobs:
+                            break
                         if (
                             medium_received_time
                             and completed == 0
@@ -231,9 +233,11 @@ class ImagineWebSocketReverse:
 
                         if msg_type == "image":
                             info = self._classify_image(
-                                msg,
+                                msg.get("url", ""),
+                                msg.get("blob", ""),
                                 final_min_bytes,
                                 medium_min_bytes,
+                                percentage_complete=msg.get("percentage_complete"),
                             )
                             if not info:
                                 continue
@@ -251,6 +255,32 @@ class ImagineWebSocketReverse:
 
                             yield info
 
+                        elif msg_type == "json":
+                            status = msg.get("current_status")
+                            if status == "start_stage":
+                                total_jobs += 1
+                                logger.debug(f"Job started: {msg.get('job_id', '')}, total={total_jobs}")
+                            elif status == "completed":
+                                completed_notifications += 1
+                                logger.debug(
+                                    f"Job completed: {msg.get('job_id', '')}, "
+                                    f"moderated={msg.get('moderated', False)}, "
+                                    f"{completed_notifications}/{total_jobs}"
+                                )
+                                yield {
+                                    "type": "status",
+                                    "current_status": "completed",
+                                    "moderated": msg.get("moderated", False),
+                                    "image_id": msg.get("image_id", ""),
+                                    "job_id": msg.get("job_id", ""),
+                                }
+                                if total_jobs > 0 and completed_notifications >= total_jobs:
+                                    logger.info(
+                                        f"All {total_jobs} jobs completed, "
+                                        f"{completed} final images received"
+                                    )
+                                    break
+
                         elif msg_type == "error":
                             logger.warning(
                                 f"WebSocket error: {msg.get('err_code', '')} - {msg.get('err_msg', '')}"
@@ -262,12 +292,14 @@ class ImagineWebSocketReverse:
                             }
                             return
 
-                        if completed >= n:
-                            logger.info(f"WebSocket collected {completed} final images")
+                        # 兜底：如果没收到 json 通知，仍用原逻辑
+                        if total_jobs == 0 and completed >= n:
+                            logger.info(f"WebSocket collected {completed} final images (fallback)")
                             break
 
                         if (
-                            medium_received_time
+                            total_jobs == 0
+                            and medium_received_time
                             and completed == 0
                             and time.monotonic() - medium_received_time > final_timeout
                         ):
