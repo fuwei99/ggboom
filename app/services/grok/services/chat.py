@@ -167,7 +167,7 @@ class MessageExtractor:
             role = item["role"] or "user"
             text = item["text"]
             display_role = role_map.get(role.lower(), role.capitalize())
-            texts.append(text if i == last_user_index else f"{display_role}: {text}")
+            texts.append(f"{display_role}: {text}")
 
         return "\n\n".join(texts), file_attachments, image_attachments
 
