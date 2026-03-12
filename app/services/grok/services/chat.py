@@ -157,10 +157,17 @@ class MessageExtractor:
             None,
         )
 
+        role_map = {
+            "system": "System",
+            "user": "Human",
+            "assistant": "Assistant"
+        }
+
         for i, item in enumerate(extracted):
             role = item["role"] or "user"
             text = item["text"]
-            texts.append(text if i == last_user_index else f"{role}: {text}")
+            display_role = role_map.get(role.lower(), role.capitalize())
+            texts.append(text if i == last_user_index else f"{display_role}: {text}")
 
         return "\n\n".join(texts), file_attachments, image_attachments
 
