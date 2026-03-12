@@ -163,13 +163,17 @@ class MessageExtractor:
             "assistant": "Assistant"
         }
 
-        for i, item in enumerate(extracted):
+        for item in extracted:
             role = item["role"] or "user"
             text = item["text"]
             display_role = role_map.get(role.lower(), role.capitalize())
             texts.append(f"{display_role}: {text}")
 
-        return "\n\n".join(texts), file_attachments, image_attachments
+        result_text = "\n\n".join(texts)
+        if extracted and extracted[-1]["role"] == "user":
+            result_text += "\n\nAssistant:"
+
+        return result_text, file_attachments, image_attachments
 
 
 class GrokChatService:
