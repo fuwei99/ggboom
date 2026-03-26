@@ -1,0 +1,23 @@
+fetch("wss://grok.com/ws/imagine/listen", {
+  "headers": {
+    "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+    "cache-control": "no-cache",
+    "pragma": "no-cache",
+    "sec-websocket-extensions": "permessage-deflate; client_max_window_bits",
+    "sec-websocket-key": "0J9+jlLQLvjYOW34306CeQ==",
+    "sec-websocket-version": "13",
+    "cookie": ""
+  },
+  "body": null,
+  "method": "GET"
+});
+
+{"type":"conversation.item.create","timestamp":1774500049220,"item":{"type":"message","content":[{"type":"reset"}]}}
+
+{"type":"conversation.item.create","timestamp":1774500049262,"item":{"type":"message","content":[{"requestId":"eab02f17-b27e-4b65-b6a7-072ed631c106","text":"画一个爷们帅哥体育生","type":"input_text","properties":{"section_count":0,"is_kids_mode":false,"enable_nsfw":true,"skip_upsampler":false,"enable_side_by_side":true,"is_initial":false,"aspect_ratio":"2:3","enable_pro":false}}]}}
+
+{"type":"json","current_status":"start_stage","percentage_complete":0.0,"job_id":"0be2bf32-a1fa-4d05-ba26-5c43c4135246","elapsed":null,"prompt":"一个帅气的爷们体育生，肌肉发达，身材健硕，阳光帅气，五官立体，穿着运动服，充满阳刚之气","confirmation":"画好了帅哥体育生","full_prompt":"一个帅气的爷们体育生，肌肉发达，身材健硕，阳光帅气，五官立体，穿着运动服，充满阳刚之气","flags":null,"is_alteration":false,"section_id":0,"input_type":"text","request_id":"eab02f17-b27e-4b65-b6a7-072ed631c106","asr_transcript":null,"asr_accepted":null,"seed":null,"image_reference":null,"is_image_edit":null,"moderated":null,"r_rated":null,"order":3,"model_name":"imagine-x-1","image_id":"0be2bf32-a1fa-4d05-ba26-5c43c4135246","side_by_side_index":null,"width":null,"height":null}
+
+{"type":"json","current_status":"start_stage","percentage_complete":0.0,"job_id":"1a8441b0-827b-4aaf-b107-a69e01d20b92","elapsed":null,"prompt":"一个帅气的爷们体育生，肌肉发达，身材健硕，阳光帅气，五官立体，穿着运动服，充满阳刚之气","confirmation":"画好了帅哥体育生","full_prompt":"一个帅气的爷们体育生，肌肉发达，身材健硕，阳光帅气，五官立体，穿着运动服，充满阳刚之气","flags":null,"is_alteration":false,"section_id":0,"input_type":"text","request_id":"eab02f17-b27e-4b65-b6a7-072ed631c106","asr_transcript":null,"asr_accepted":null,"seed":null,"image_reference":null,"is_image_edit":null,"moderated":null,"r_rated":null,"order":4,"model_name":"imagine-x-1","image_id":"1a8441b0-827b-4aaf-b107-a69e01d20b92","side_by_side_index":null,"width":null,"height":null}
+
+{"type":"image","blob":"base64，过于长了，省略","job_id":"1a8441b0-827b-4aaf-b107-a69e01d20b92","grid_index":0,"is_alteration":false,"order":4,"section_id":0,"request_id":"eab02f17-b27e-4b65-b6a7-072ed631c106","url":"https://imagine-public.x.ai/imagine-public/images/1a8441b0-827b-4aaf-b107-a69e01d20b92.png","id":"1a8441b0-827b-4aaf-b107-a69e01d20b92","prompt":"一个帅气的爷们体育生，肌肉发达，身材健硕，阳光帅气，五官立体，穿着运动服，充满阳刚之气","full_prompt":"一个帅气的爷们体育生，肌肉发达，身材健硕，阳光帅气，五官立体，穿着运动服，充满阳刚之气","percentage_complete":50.0,"model_name":"imagine-x-1","suggested_moderation_rule":null,"r_rated":false,"moderated":false,"side_by_side_index":null,"confirmation":null,"is_root_r_rated":null,"is_root_user_uploaded":null,"width":784,"height":1168,"is_root_celebrity":null,"is_root_child":null,"has_watermark":null,"is_jurisdiction_restricted":null}
